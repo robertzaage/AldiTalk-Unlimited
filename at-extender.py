@@ -33,7 +33,7 @@ def load_config():
         config = json.load(f)
     return config
 
-    # Fallback: Wenn kein Browser definiert ist, verwende "chromium"
+
     config.setdefault("BROWSER", "chromium")
     return config
 
