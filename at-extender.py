@@ -7,6 +7,7 @@ import random
 import os
 import sys
 import io
+import re
 from playwright.sync_api import sync_playwright, TimeoutError
 
 # Logging einrichten
@@ -18,7 +19,7 @@ LOGIN_URL = "https://login.alditalk-kundenbetreuung.de/signin/XUI/#login/"
 DASHBOARD_URL = "https://www.alditalk-kundenportal.de/portal/auth/buchungsuebersicht/"
 UBERSICHT_URL = "https://www.alditalk-kundenportal.de/portal/auth/uebersicht/"
 
-VERSION = "1.0.8"  # Deine aktuelle Version
+VERSION = "1.0.9"  # Deine aktuelle Version
 
 REMOTE_VERSION_URL = "https://raw.githubusercontent.com/Dinobeiser/AT-Extender/main/version.txt"  # Link zur Version
 REMOTE_SCRIPT_URL = "https://raw.githubusercontent.com/Dinobeiser/AT-Extender/main/at-extender.py"  # Link zum neuesten Skript
@@ -30,6 +31,10 @@ HEADLESS = True
 def load_config():
     with open("config.json", "r") as f:
         config = json.load(f)
+    return config
+
+    # Fallback: Wenn kein Browser definiert ist, verwende "chromium"
+    config.setdefault("BROWSER", "chromium")
     return config
 
 # Konfigurationsvariablen aus der JSON-Datei laden
@@ -125,7 +130,14 @@ def login_and_check_data():
         for attempt in range(3):  # 3 Versuche, falls Playwright abstürzt
             try:
                 logging.info("Starte Browser...")
-                browser = p.chromium.launch(headless=HEADLESS)
+                browser_type = config.get("BROWSER", "chromium").lower()
+
+                if browser_type == "firefox":
+                    browser = p.firefox.launch(headless=HEADLESS)
+                elif browser_type == "webkit":
+                    browser = p.webkit.launch(headless=HEADLESS)
+                else:
+                    browser = p.chromium.launch(headless=HEADLESS)
                 context = browser.new_context(user_agent=USER_AGENT)
                 page = context.new_page()
 
@@ -151,19 +163,23 @@ def login_and_check_data():
                 time.sleep(3)
 
                 logging.info("Lese Datenvolumen aus...")
-                GB_text = page.text_content('one-cluster[slot="help-text"]')
 
-                if not GB_text:
+                GB_text_raw = page.text_content('one-cluster[slot="help-text"]')
+                if not GB_text_raw:
                     raise Exception("Konnte das Datenvolumen nicht auslesen.")
 
-                GB_text = GB_text.replace(" von 15 GB übrig im Inland", "").replace(",", ".")
+                # Beispiel: "6,52 GB von 15 GB übrig im Inland"
+                match = re.search(r"([\d\.,]+)\s?(GB|MB)", GB_text_raw)
+                if not match:
+                    raise ValueError(f"Unerwartetes Format: {GB_text_raw}")
 
-                if "MB" in GB_text:
-                    GB = float(GB_text.replace(" MB", "")) / 1024  # MB in GB umwandeln
-                elif "GB" in GB_text:
-                    GB = float(GB_text.replace(" GB", ""))
+                value, unit = match.groups()
+                value = value.replace(",", ".")
+
+                if unit == "MB":
+                    GB = float(value) / 1024
                 else:
-                    raise ValueError(f"Unerwartetes Format: {GB_text}")
+                    GB = float(value)
 
                 logging.info(f"Aktuelles Datenvolumen: {GB:.2f} GB")
 
