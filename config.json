@@ -6,5 +6,6 @@
   "CHAT_ID": "DeineChatID",
   "AUTO_UPDATE": "1",
   "SLEEP_MODE": "random",
-  "SLEEP_INTERVAL": "70"
+  "SLEEP_INTERVAL": "70",
+  "BROWSER": "chromium"
 }
