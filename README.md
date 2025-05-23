@@ -96,7 +96,7 @@ Erstelle eine Datei namens `config.json` im gleichen Verzeichnis wie das Skript 
 | `TELEGRAM`        | `1` für Telegram-Nachrichten, `0` für deaktivieren                          |
 | `SLEEP_MODE`      | `"random"` oder `"fixed"`                                                   |
 | `SLEEP_INTERVAL`  | Intervall in Sekunden (nur relevant bei `"fixed"`), **min. 70 Sekunden**    |
-| `BROWSER`  | "chromium" (Standard) oder "firefox" - je nach Systemstabilität |
+| `BROWSER`  | "chromium" (Standard) oder "firefox"  |
 | Hinweis: Manche Server-configs funktionieren stabiler mit "firefox" - ideal für schwächere Instanzen oder wenn input-6/help-text nicht geladen werden. |
 
 ---
