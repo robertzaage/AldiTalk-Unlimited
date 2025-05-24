@@ -19,7 +19,7 @@ LOGIN_URL = "https://login.alditalk-kundenbetreuung.de/signin/XUI/#login/"
 DASHBOARD_URL = "https://www.alditalk-kundenportal.de/portal/auth/buchungsuebersicht/"
 UBERSICHT_URL = "https://www.alditalk-kundenportal.de/portal/auth/uebersicht/"
 
-VERSION = "1.0.9"  # Deine aktuelle Version
+VERSION = "1.1.0"  # Deine aktuelle Version
 
 REMOTE_VERSION_URL = "https://raw.githubusercontent.com/Dinobeiser/AT-Extender/main/version.txt"  # Link zur Version
 REMOTE_SCRIPT_URL = "https://raw.githubusercontent.com/Dinobeiser/AT-Extender/main/at-extender.py"  # Link zum neuesten Skript
@@ -27,17 +27,22 @@ REMOTE_SCRIPT_URL = "https://raw.githubusercontent.com/Dinobeiser/AT-Extender/ma
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:137.0) Gecko/20100101 Firefox/137.0"
 HEADLESS = True
 
-# Konfiguration aus der config.json Datei laden
+
 def load_config():
     with open("config.json", "r") as f:
         config = json.load(f)
+
+    valid_browsers = ["chromium", "firefox", "webkit"]
+    browser = config.get("BROWSER", "chromium").lower()
+
+    if browser not in valid_browsers:
+        logging.warning(f"Ungültiger Browserwert '{browser}' in config.json – fallback auf 'chromium'")
+        browser = "chromium"
+
+    config["BROWSER"] = browser
     return config
 
 
-    config.setdefault("BROWSER", "chromium")
-    return config
-
-# Konfigurationsvariablen aus der JSON-Datei laden
 config = load_config()
 
 RUFNUMMER = config["RUFNUMMER"]
@@ -48,10 +53,9 @@ AUTO_UPDATE = config["AUTO_UPDATE"]
 TELEGRAM = config["TELEGRAM"]
 SLEEP_MODE = config["SLEEP_MODE"]
 SLEEP_INTERVAL = config["SLEEP_INTERVAL"]
-
+BROWSER = config["BROWSER"]
 
 TELEGRAM_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-
 
 def send_telegram_message(message, retries=3):
     if TELEGRAM == "1":
@@ -129,12 +133,10 @@ def login_and_check_data():
     with sync_playwright() as p:
         for attempt in range(3):  # 3 Versuche, falls Playwright abstürzt
             try:
-                logging.info("Starte Browser...")
-                browser_type = config.get("BROWSER", "chromium").lower()
-
-                if browser_type == "firefox":
+                logging.info(f"Starte {BROWSER}...")
+                if BROWSER == "firefox":
                     browser = p.firefox.launch(headless=HEADLESS)
-                elif browser_type == "webkit":
+                elif BROWSER == "webkit":
                     browser = p.webkit.launch(headless=HEADLESS)
                 else:
                     browser = p.chromium.launch(headless=HEADLESS)
@@ -220,17 +222,20 @@ def sleep_interval(config):
     mode = config.get("SLEEP_MODE", "random")  # "fixed" oder "random"
 
     if mode == "fixed":
-        # Hole den Wert für das feste Intervall aus der config.json
-        interval = config.get("SLEEP_INTERVAL", 70)  # Standard auf 70 Sekunden, wenn nicht gesetzt
+        try:
+            interval = int(config.get("SLEEP_INTERVAL", 70))  # Sicherstellen, dass es ein int ist
+        except ValueError:
+            logging.warning("⚠️ Ungültiger SLEEP_INTERVAL-Wert – setze auf Standard 90 Sekunden.")
+            interval = 90
+
         if interval < 60:
             print("⚠️ Intervall zu kurz, auf 90 Sekunden gesetzt.")
             interval = 90  # Mindestintervall von 90 Sekunden
     elif mode == "random":
-        # Wenn SLEEP_MODE = random, dann zufälliger Wert zwischen 300 und 500 Sekunden
         interval = random.randint(300, 500)
     else:
         print("⚠️ Ungültiger SLEEP_MODE, verwende Standard 'random'.")
-        interval = random.randint(300, 500)  # Standard zufälliger Wert zwischen 300 und 500 Sekunden
+        interval = random.randint(300, 500)
 
     logging.info(f"💤 Warte {interval} Sekunden...")
     time.sleep(interval)
