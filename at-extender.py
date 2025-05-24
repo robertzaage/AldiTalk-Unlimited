@@ -36,7 +36,7 @@ def load_config():
     browser = config.get("BROWSER", "chromium").lower()
 
     if browser not in valid_browsers:
-        logging.warning(f"Ungültiger Browserwert '{browser}' in config.json – fallback auf 'chromium'")
+        logging.warning(f"Ungültiger Browser '{browser}' in config.json – fallback auf 'chromium'")
         browser = "chromium"
 
     config["BROWSER"] = browser
