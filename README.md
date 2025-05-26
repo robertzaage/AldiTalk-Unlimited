@@ -183,6 +183,8 @@ ETH: 0xcBa34A1744d3c89301600182938Fca0134b99A43
 
 LTC: ltc1qzlwynlnsrw0j4etffne8f8mmnjep2xdtnv66wa
 
+Aldi-Talk Guthabencode per email an: at-extender@proton.me
+
 ---
 ## 📜 Lizenz
 
