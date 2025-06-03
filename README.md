@@ -12,7 +12,7 @@ Link:
 https://media.medion.com/cms/medion/alditalkde/ALDI-TALK-Leistungsbeschreibung.pdf?dl=0525
 
 ---
-📢 Updates, Hilfe & Community
+## 📢 Updates, Hilfe & Community
 
 🔔 Info-Kanal: @ATExtender_infocenter ( https://t.me/ATExtender_infocenter )
 
