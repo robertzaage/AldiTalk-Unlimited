@@ -19,12 +19,12 @@ LOGIN_URL = "https://login.alditalk-kundenbetreuung.de/signin/XUI/#login/"
 DASHBOARD_URL = "https://www.alditalk-kundenportal.de/portal/auth/buchungsuebersicht/"
 UBERSICHT_URL = "https://www.alditalk-kundenportal.de/portal/auth/uebersicht/"
 
-VERSION = "1.1.0"  # Deine aktuelle Version
+VERSION = "1.1.1"  # Deine aktuelle Version
 
 REMOTE_VERSION_URL = "https://raw.githubusercontent.com/Dinobeiser/AT-Extender/main/version.txt"  # Link zur Version
 REMOTE_SCRIPT_URL = "https://raw.githubusercontent.com/Dinobeiser/AT-Extender/main/at-extender.py"  # Link zum neuesten Skript
 
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:137.0) Gecko/20100101 Firefox/137.0"
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:139.0) Gecko/20100101 Firefox/139.0"
 HEADLESS = True
 
 
@@ -186,7 +186,7 @@ def login_and_check_data():
                 logging.info(f"Aktuelles Datenvolumen: {GB:.2f} GB")
 
                 if GB < 1.0:
-                    message = f"⚠️ Nur noch {GB:.2f} GB übrig! Versuche, Datenvolumen nachzubuchen..."
+                    message = f"{RUFNUMMER}: ⚠️ Nur noch {GB:.2f} GB übrig! Versuche, Datenvolumen nachzubuchen..."
                     send_telegram_message(message)
 
                     logging.info("Öffne Nachbuchungsseite...")
@@ -197,19 +197,19 @@ def login_and_check_data():
                     logging.info("Klicke auf den Nachbuchungsbutton...")
                     if wait_and_click(page, 'one-button[slot="action"]'):
                         time.sleep(2)
-                        send_telegram_message("✅ Datenvolumen erfolgreich nachgebucht!")
+                        send_telegram_message(f"{RUFNUMMER}: Datenvolumen erfolgreich nachgebucht! ✅")
                         logging.info("1 GB Datenvolumen wurde nachgebucht!")
                     else:
                         raise Exception("❌ Konnte den Nachbuchungsbutton nicht klicken!")
 
                 else:
-                    send_telegram_message(f"✅ Noch {GB:.2f} GB übrig. Kein Nachbuchen erforderlich.")
+                    send_telegram_message(f"{RUFNUMMER}: Noch {GB:.2f} GB übrig. Kein Nachbuchen erforderlich. ✅")
 
                 return  # Erfolgreicher Durchlauf, keine Wiederholung nötig
 
             except Exception as e:
                 logging.error(f"Fehler im Versuch {attempt+1}: {e}")
-                send_telegram_message(f"❌ Fehler beim Abrufen des Datenvolumens: {e}")
+                send_telegram_message(f"{RUFNUMMER}: Fehler beim Abrufen des Datenvolumens: {e} ❌")
 
             finally:
                 browser.close()
