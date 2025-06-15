@@ -16,15 +16,14 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 LOGIN_URL = "https://login.alditalk-kundenbetreuung.de/signin/XUI/#login/"
-DASHBOARD_URL = "https://www.alditalk-kundenportal.de/portal/auth/buchungsuebersicht/"
-UBERSICHT_URL = "https://www.alditalk-kundenportal.de/portal/auth/uebersicht/"
+DASHBOARD_URL = "https://www.alditalk-kundenportal.de/portal/auth/uebersicht/"
 
-VERSION = "1.1.1"  # Deine aktuelle Version
+VERSION = "1.1.4"  # Deine aktuelle Version
 
 REMOTE_VERSION_URL = "https://raw.githubusercontent.com/Dinobeiser/AT-Extender/main/version.txt"  # Link zur Version
 REMOTE_SCRIPT_URL = "https://raw.githubusercontent.com/Dinobeiser/AT-Extender/main/at-extender.py"  # Link zum neuesten Skript
 
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:139.0) Gecko/20100101 Firefox/139.0"
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:137.0) Gecko/20100101 Firefox/139.0"
 HEADLESS = True
 
 
@@ -36,7 +35,7 @@ def load_config():
     browser = config.get("BROWSER", "chromium").lower()
 
     if browser not in valid_browsers:
-        logging.warning(f"Ungültiger Browser '{browser}' in config.json – fallback auf 'chromium'")
+        logging.warning(f"Ungültiger Browserwert '{browser}' in config.json - fallback auf 'chromium'")
         browser = "chromium"
 
     config["BROWSER"] = browser
@@ -69,7 +68,6 @@ def send_telegram_message(message, retries=3):
                     logging.warning(f"Fehler beim Senden (Versuch {attempt+1}): {response.text}")
             except Exception as e:
                 logging.error(f"Fehler beim Telegram-Senden (Versuch {attempt+1}): {e}")
-            time.sleep(2)
         logging.error("Telegram konnte nicht erreicht werden.")
         return False
     else:
@@ -104,7 +102,7 @@ def check_for_update():
                         f.write(update.text)
                     logging.info("✅ Update erfolgreich! Starte neu...")
 
-                    # Universeller Neustart – funktioniert mit venv & system-python
+                    # Universeller Neustart - funktioniert mit venv & system-python
                     os.execv(sys.executable, [sys.executable] + sys.argv)
 
                 else:
@@ -133,47 +131,133 @@ def login_and_check_data():
     with sync_playwright() as p:
         for attempt in range(3):  # 3 Versuche, falls Playwright abstürzt
             try:
+                COOKIE_FILE = "cookies.json"
                 logging.info(f"Starte {BROWSER}...")
+
+                # Browser starten
                 if BROWSER == "firefox":
                     browser = p.firefox.launch(headless=HEADLESS)
                 elif BROWSER == "webkit":
                     browser = p.webkit.launch(headless=HEADLESS)
                 else:
                     browser = p.chromium.launch(headless=HEADLESS)
-                context = browser.new_context(user_agent=USER_AGENT)
+
+                # Cookies vorbereiten
+                if os.path.exists(COOKIE_FILE):
+                    logging.info("Lade gespeicherte Cookies...")
+                    context = browser.new_context(user_agent=USER_AGENT, storage_state=COOKIE_FILE)
+                else:
+                    logging.info("Keine Cookies vorhanden - neuer Kontext wird erstellt.")
+                    context = browser.new_context(user_agent=USER_AGENT)
+
                 page = context.new_page()
 
-                logging.info("Öffne Aldi Talk Login-Seite...")
-                page.goto(LOGIN_URL)
-                page.wait_for_load_state("domcontentloaded")
+                # Hilfsfunktion: prüfen, ob eingeloggt anhand Überschrift
+                def login_erfolgreich(p):
+                    try:
+                        p.wait_for_selector('one-heading[level="h1"]', timeout=8000)
+                        heading = p.text_content('one-heading[level="h1"]')
+                        return heading and "Übersicht" in heading
+                    except:
+                        return False
 
-                wait_and_click(page, 'button[data-testid="uc-deny-all-button"]')
-
-                logging.info("Fülle Login-Daten aus...")
-                page.fill('#input-5', RUFNUMMER)
-                page.fill('#input-6', PASSWORT)
-
-                if not wait_and_click(page, '[class="button button--solid button--medium button--color-default button--has-label"]'):
-                    raise Exception("Login-Button konnte nicht geklickt werden.")
-
-                logging.info("Warte auf Login...")
-                time.sleep(8)
-
-                logging.info("Öffne Datenvolumen-Übersicht...")
-                page.goto(DASHBOARD_URL)
-                page.wait_for_load_state("domcontentloaded")
+                # Dashboard aufrufen
+                page.goto(DASHBOARD_URL, wait_until="domcontentloaded")
                 time.sleep(3)
 
+                # Prüfen ob auf Login-Seite umgeleitet wurde
+                if "login" in page.url:
+                    logging.info("Nicht eingeloggt - Login wird durchgeführt...")
+                    page.goto(LOGIN_URL)
+                    page.wait_for_load_state("domcontentloaded")
+                    wait_and_click(page, 'button[data-testid="uc-deny-all-button"]')
+
+                    logging.info("Fülle Login-Daten aus...")
+                    page.fill('#input-5', RUFNUMMER)
+                    page.fill('#input-6', PASSWORT)
+
+                    if not wait_and_click(page, '[class="button button--solid button--medium button--color-default button--has-label"]'):
+                        raise Exception("Login-Button konnte nicht geklickt werden.")
+
+                    logging.info("Warte auf Login...")
+                    time.sleep(8)
+                    page.wait_for_load_state("domcontentloaded")
+
+                    if login_erfolgreich(page):
+                        logging.info("Login erfolgreich - Cookies werden gespeichert.")
+                        context.storage_state(path=COOKIE_FILE)
+                    else:
+                        raise Exception("Login fehlgeschlagen - Übersichtsseite nicht sichtbar.")
+                else:
+                    logging.info(" Bereits eingeloggt - Zugriff aufs Dashboard funktioniert.")
+
+                    if not login_erfolgreich(page):
+                        logging.warning("Session scheint abgelaufen oder inkonsistent - versuche erneuten Login...")
+
+                        if os.path.exists(COOKIE_FILE):
+                            os.remove(COOKIE_FILE)
+                            logging.info("Alte Cookies wurden gelöscht, da ungültig.")
+
+                        # Versuche Login erneut
+                        page.goto(LOGIN_URL)
+                        page.wait_for_load_state("domcontentloaded")
+                        wait_and_click(page, 'button[data-testid="uc-deny-all-button"]')
+
+                        logging.info("Fülle Login-Daten aus (Fallback)...")
+                        page.fill('#input-5', RUFNUMMER)
+                        page.fill('#input-6', PASSWORT)
+
+                        if not wait_and_click(page, '[class="button button--solid button--medium button--color-default button--has-label"]'):
+                            raise Exception("Fallback-Login: Login-Button konnte nicht geklickt werden.")
+
+                        logging.info("Warte auf Login... (Fallback)")
+                        time.sleep(8)
+                        page.wait_for_load_state("domcontentloaded")
+
+                        if login_erfolgreich(page):
+                            logging.info("Fallback-Login erfolgreich neue Cookies werden gespeichert.")
+                            context.storage_state(path=COOKIE_FILE)
+                        else:
+                            raise Exception("Fallback-Login fehlgeschlagen Session kann nicht wiederhergestellt werden.")
+
+                    # Session aktiv verlängern durch Aktion:
+                    try:
+                        page.hover('one-heading[level="h1"]')
+                        logging.info("Session-Aktivität erfolgreich simuliert hover auf Überschrift.")
+                    except:
+                        logging.warning("Session konnte nicht ausgeführt werden.")
+
+                    #
+                    logging.info("Cookies werden erneuert.")
+                    context.storage_state(path=COOKIE_FILE)
+
+                # Weiter mit Datenvolumen-Logik
                 logging.info("Lese Datenvolumen aus...")
 
-                GB_text_raw = page.text_content('one-cluster[slot="help-text"]')
-                if not GB_text_raw:
-                    raise Exception("Konnte das Datenvolumen nicht auslesen.")
 
-                # Beispiel: "6,52 GB von 15 GB übrig im Inland"
+                GB_selectors = [
+                    'one-stack.usage-meter:nth-child(1) > one-usage-meter:nth-child(1) > one-group:nth-child(1) > one-heading:nth-child(2)',
+                    'one-stack.usage-meter:nth-child(1) > one-stack:nth-child(1) > one-usage-meter:nth-child(1) > one-group:nth-child(1) > one-heading:nth-child(2)'
+                ]
+
+                GB_text_raw = None
+                for sel in GB_selectors:
+                    try:
+                        element = page.query_selector(sel)
+                        if element:
+                            GB_text_raw = element.text_content()
+                            if GB_text_raw:
+                                break
+                    except Exception as e:
+                        logging.warning(f"Selector {sel} nicht verfügbar: {e}")
+                        continue
+
+                if not GB_text_raw:
+                    raise Exception("Konnte das Datenvolumen nicht auslesen - kein gültiger Selector gefunden.")
+
                 match = re.search(r"([\d\.,]+)\s?(GB|MB)", GB_text_raw)
                 if not match:
-                    raise ValueError(f"Unerwartetes Format: {GB_text_raw}")
+                    raise ValueError(f"Unerwartetes Format beim Datenvolumen: {GB_text_raw}")
 
                 value, unit = match.groups()
                 value = value.replace(",", ".")
@@ -185,22 +269,16 @@ def login_and_check_data():
 
                 logging.info(f"Aktuelles Datenvolumen: {GB:.2f} GB")
 
+
                 if GB < 1.0:
-                    message = f"{RUFNUMMER}: ⚠️ Nur noch {GB:.2f} GB übrig! Versuche, Datenvolumen nachzubuchen..."
-                    send_telegram_message(message)
-
-                    logging.info("Öffne Nachbuchungsseite...")
-                    page.goto(UBERSICHT_URL)
-                    page.wait_for_load_state("domcontentloaded")
-                    time.sleep(2)
-
-                    logging.info("Klicke auf den Nachbuchungsbutton...")
+                    logging.info("Versuche, 1 GB Datenvolumen nachzubuchen...")
                     if wait_and_click(page, 'one-button[slot="action"]'):
-                        time.sleep(2)
-                        send_telegram_message(f"{RUFNUMMER}: Datenvolumen erfolgreich nachgebucht! ✅")
-                        logging.info("1 GB Datenvolumen wurde nachgebucht!")
+                        message = f"{RUFNUMMER}: Aktuelles Datenvolumen: {GB:.2f} GB - 1 GB wurde erfolgreich nachgebucht. ✅"
+                        logging.info("1 GB Datenvolumen wurde erfolgreich nachgebucht.")
                     else:
                         raise Exception("❌ Konnte den Nachbuchungsbutton nicht klicken!")
+
+                    send_telegram_message(message)
 
                 else:
                     send_telegram_message(f"{RUFNUMMER}: Noch {GB:.2f} GB übrig. Kein Nachbuchen erforderlich. ✅")
@@ -209,13 +287,13 @@ def login_and_check_data():
 
             except Exception as e:
                 logging.error(f"Fehler im Versuch {attempt+1}: {e}")
-                send_telegram_message(f"{RUFNUMMER}: Fehler beim Abrufen des Datenvolumens: {e} ❌")
+                send_telegram_message(f"{RUFNUMMER}: ❌ Fehler beim Abrufen des Datenvolumens: {e}")
 
             finally:
                 browser.close()
                 logging.info("Browser geschlossen.")
 
-            time.sleep(5)  # Kurze Pause zwischen Wiederholungen
+            time.sleep(2)
         logging.error("Skript hat nach 3 Versuchen aufgegeben.")
 
 def sleep_interval(config):
@@ -225,7 +303,7 @@ def sleep_interval(config):
         try:
             interval = int(config.get("SLEEP_INTERVAL", 70))  # Sicherstellen, dass es ein int ist
         except ValueError:
-            logging.warning("⚠️ Ungültiger SLEEP_INTERVAL-Wert – setze auf Standard 90 Sekunden.")
+            logging.warning("⚠️ Ungültiger SLEEP_INTERVAL-Wert - setze auf Standard 90 Sekunden.")
             interval = 90
 
         if interval < 60:
