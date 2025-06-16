@@ -18,7 +18,7 @@ sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 LOGIN_URL = "https://login.alditalk-kundenbetreuung.de/signin/XUI/#login/"
 DASHBOARD_URL = "https://www.alditalk-kundenportal.de/portal/auth/uebersicht/"
 
-VERSION = "1.1.4"  # Deine aktuelle Version
+VERSION = "1.1.5"  # Deine aktuelle Version
 
 REMOTE_VERSION_URL = "https://raw.githubusercontent.com/Dinobeiser/AT-Extender/main/version.txt"  # Link zur Version
 REMOTE_SCRIPT_URL = "https://raw.githubusercontent.com/Dinobeiser/AT-Extender/main/at-extender.py"  # Link zum neuesten Skript
@@ -55,6 +55,24 @@ SLEEP_INTERVAL = config["SLEEP_INTERVAL"]
 BROWSER = config["BROWSER"]
 
 TELEGRAM_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+
+LAST_GB = 0.0
+
+try:
+    with open("state.json", "r") as f:
+        data = json.load(f)
+        if isinstance(data, dict) and "last_gb" in data:
+            LAST_GB = float(data["last_gb"])
+        else:
+            raise ValueError("Ungültiges Format in state.json - setze zurück.")
+except Exception as e:
+    try:
+        with open("state.json", "w") as f:
+            json.dump({"last_gb": 0.0}, f)
+    except Exception as save_error:
+        logging.error(f"Konnte 'state.json' nicht neu erstellen: {save_error}")
+
+
 
 def send_telegram_message(message, retries=3):
     if TELEGRAM == "1":
@@ -128,6 +146,7 @@ def wait_and_click(page, selector, timeout=5000, retries=5):
     return False
 
 def login_and_check_data():
+    global LAST_GB
     with sync_playwright() as p:
         for attempt in range(3):  # 3 Versuche, falls Playwright abstürzt
             try:
@@ -267,6 +286,14 @@ def login_and_check_data():
                 else:
                     GB = float(value)
 
+                LAST_GB = GB
+
+                try:
+                    with open("state.json", "w") as f:
+                        json.dump({"last_gb": LAST_GB}, f)
+                except Exception as e:
+                    logging.warning(f"⚠️ Fehler beim Speichern des GB-Werts: {e}")
+
                 logging.info(f"Aktuelles Datenvolumen: {GB:.2f} GB")
 
 
@@ -281,7 +308,11 @@ def login_and_check_data():
                     send_telegram_message(message)
 
                 else:
-                    send_telegram_message(f"{RUFNUMMER}: Noch {GB:.2f} GB übrig. Kein Nachbuchen erforderlich. ✅")
+                    interval = get_interval(config)
+                    send_telegram_message(f"{RUFNUMMER}: Noch {LAST_GB:.2f} GB übrig. Nächster Run in {interval} Sekunden. ✅")
+                    return interval
+
+
 
                 return  # Erfolgreicher Durchlauf, keine Wiederholung nötig
 
@@ -296,31 +327,52 @@ def login_and_check_data():
             time.sleep(2)
         logging.error("Skript hat nach 3 Versuchen aufgegeben.")
 
-def sleep_interval(config):
-    mode = config.get("SLEEP_MODE", "random")  # "fixed" oder "random"
 
-    if mode == "fixed":
-        try:
-            interval = int(config.get("SLEEP_INTERVAL", 70))  # Sicherstellen, dass es ein int ist
-        except ValueError:
-            logging.warning("⚠️ Ungültiger SLEEP_INTERVAL-Wert - setze auf Standard 90 Sekunden.")
-            interval = 90
-
-        if interval < 60:
-            print("⚠️ Intervall zu kurz, auf 90 Sekunden gesetzt.")
-            interval = 90  # Mindestintervall von 90 Sekunden
-    elif mode == "random":
-        interval = random.randint(300, 500)
+def get_smart_interval():
+    if LAST_GB >= 10:
+        return random.randint(3600, 5400)
+    elif LAST_GB >= 5:
+        return random.randint(900, 1800)
+    elif LAST_GB >= 3:
+        return random.randint(600, 900)
+    elif LAST_GB >= 2:
+        return random.randint(300, 450)
+    elif LAST_GB >= 1.2:
+        return random.randint(150, 240)
+    elif LAST_GB >= 1.0:
+        return random.randint(60, 90)
     else:
-        print("⚠️ Ungültiger SLEEP_MODE, verwende Standard 'random'.")
-        interval = random.randint(300, 500)
+        return 60  # Fallback
 
-    logging.info(f"💤 Warte {interval} Sekunden...")
-    time.sleep(interval)
+
+def get_interval(config):
+    mode = config.get("SLEEP_MODE", "random")
+    if mode == "smart":
+        return get_smart_interval()
+    elif mode == "fixed":
+        try:
+            return int(config.get("SLEEP_INTERVAL", 90))
+        except ValueError:
+            return 90
+    elif mode.startswith("random_"):
+        try:
+            _, range_str = mode.split("_", 1)
+            min_val, max_val = map(int, range_str.split("-"))
+
+            if min_val >= max_val:
+                raise ValueError("Min muss kleiner als Max sein")
+            return random.randint(min_val, max_val)
+
+        except Exception as e:
+            return random.randint(300, 500)
+
+    else:
+        return random.randint(300, 500)
 
 if __name__ == "__main__":
     while True:
-        check_for_update()  # Ruft die Update-Funktion auf
+        check_for_update()
         logging.info("Starte neuen Durchlauf...")
-        login_and_check_data()
-        sleep_interval(config)
+        interval = login_and_check_data()
+        logging.info(f"💤 Warte {interval} Sekunden...")
+        time.sleep(interval)
