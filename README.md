@@ -93,18 +93,17 @@ Erstelle eine Datei namens `config.json` im gleichen Verzeichnis wie das Skript 
 ```
 
 ### Felder erklärt:
-
 | Schlüssel        | Beschreibung                                                                 |
 |------------------|------------------------------------------------------------------------------|
-| `RUFNUMMER`       | Deine ALDI TALK Nummer (mit 0 am Anfang)                   |
+| `RUFNUMMER`       | Deine ALDI TALK Nummer (mit 0 am Anfang)                                    |
 | `PASSWORT`        | Dein Kundenportal-Passwort                                                  |
 | `BOT_TOKEN`       | Telegram-Bot-Token von [@BotFather](https://t.me/BotFather)                 |
 | `CHAT_ID`         | Deine Telegram-Chat-ID (z. B. via [@userinfobot](https://t.me/userinfobot)) |
 | `AUTO_UPDATE`     | `1` für Auto-Update aktivieren, `0` für deaktivieren                        |
 | `TELEGRAM`        | `1` für Telegram-Nachrichten, `0` für deaktivieren                          |
-| `SLEEP_MODE`      | `"random"` oder `"fixed"`                                                   |
+| `SLEEP_MODE`      | Steuert, wie lange das Skript nach jedem Durchlauf pausiert: <br><br> `"random"` - Zufälliges Intervall zwischen ca. 5-8 Minuten. <br> `"fixed"` - Nutzt das feste Intervall aus `SLEEP_INTERVAL` in Sekunden. <br> `"smart"` - Dynamisch an das verbleibende Datenvolumen angepasst
 | `SLEEP_INTERVAL`  | Intervall in Sekunden (nur relevant bei `"fixed"`), **min. 70 Sekunden**    |
-| `BROWSER`  | "chromium" (Standard) oder "firefox"  |
+| `BROWSER`         | `"chromium"` (Standard) oder `"firefox"`                                    |
 | Hinweis: Manche Server-configs funktionieren stabiler mit "firefox" - ideal für schwächere Instanzen oder wenn input-6/help-text nicht geladen werden. |
 
 ---
